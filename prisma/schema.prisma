@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model cards {
+  id           Int      @default(0)
+  deck_ID_var  String
+  name_var     String
+  category_int Int?
+  image_var    String?
+  count_int    Decimal? @db.Decimal(32, 0)
+  stage        String?
+  type         String?
+  first_attack String?
+
+  @@unique([deck_ID_var, name_var], name: "unique_deck_card")
+  @@index([deck_ID_var, name_var(length: 100)], name: "idx_deck_name")
+}
+
+model card_categories {
+  id       Int    @id @default(autoincrement())
+  name_var String @db.VarChar(100)
+
+  @@index([id])
+}
+
+model decks {
+  id               Int     @id @default(autoincrement())
+  deck_ID_var      String
+  rank_int         Int?
+  point_int        Int?
+  event_holding_id Int?
+  deck_date_date   DateTime? @db.Date
+  deck_place_var   String?
+  place_var        String?
+  player_name      String?
+  player_id        String?
+
+  event events? @relation(fields: [event_holding_id], references: [event_holding_id])
+
+  @@index([event_holding_id, rank_int], name: "idx_event_rank")
+}
+
+model events {
+  id               Int      @id @default(autoincrement())
+  event_holding_id Int      @unique
+  event_date_date  DateTime? @db.Date
+  event_league_int Int?
+  event_prefecture String?
+
+  decks decks[]
+
+  @@index([event_date_date, event_league_int], name: "idx_date_league")
+  @@index([event_prefecture], name: "idx_prefecture")
+}
+
+model deck_categories1 {
+  id            Int     @id @default(autoincrement())
+  category1_var String
+  conds         String? @db.Text
+}

@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="720" viewBox="0 0 1060 720">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#00000018"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+    </marker>
+    <marker id="crow" markerWidth="12" markerHeight="10" refX="0" refY="5" orient="auto">
+      <path d="M0,5 L10,0 M0,5 L10,10 M10,0 L10,10" stroke="#6b7280" stroke-width="1.5" fill="none"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1060" height="720" fill="#f1f5f9"/>
+
+  <!-- Title -->
+  <text x="530" y="30" font-size="20" fill="#1e293b" text-anchor="middle" font-family="sans-serif" font-weight="bold">pokemon_final — ER Diagram</text>
+
+  <!-- Relation line: events (1) → decks (N) -->
+  <line x1="450" y1="204" x2="450" y2="460"
+    stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6,3"
+    marker-start="url(#arrow)" marker-end="url(#crow)"/>
+  <text x="458" y="332" font-size="11" fill="#374151" font-family="sans-serif">1</text>
+  <text x="458" y="348" font-size="11" fill="#374151" font-family="sans-serif">N</text>
+
+  <!-- Relation label -->
+  <text x="390" y="324" font-size="10" fill="#6b7280" font-family="sans-serif">event_holding_id</text>
+
+  <!-- Tables -->
+  
+  <g transform="translate(320,40)">
+    <rect width="260" height="164" rx="8" fill="white" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect width="260" height="32" rx="8" fill="#1e40af"/>
+    <rect y="24" width="260" height="8" fill="#1e40af"/>
+    <text x="130" y="21" font-size="14" fill="white" text-anchor="middle" font-family="sans-serif" font-weight="bold">events</text>
+    
+      <rect x="0" y="32" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="48" font-size="12" fill="#b45309" font-family="monospace" font-weight="bold">id</text>
+      <text x="218" y="48" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      <rect x="224" y="37" width="24" height="14" rx="3" fill="#fef3c7"/><text x="236" y="48" font-size="9" fill="#92400e" text-anchor="middle" font-family="monospace">PK</text>
+      <rect x="0" y="56" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="72" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">event_holding_id</text>
+      <text x="218" y="72" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT UNIQUE</text>
+      
+      <rect x="0" y="80" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="96" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">event_date_date</text>
+      <text x="218" y="96" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">DATE</text>
+      
+      <rect x="0" y="104" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="120" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">event_league_int</text>
+      <text x="218" y="120" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      
+      <rect x="0" y="128" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="144" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">event_prefecture</text>
+      <text x="218" y="144" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+    <rect width="260" height="164" rx="8" fill="none" stroke="#d1d5db" stroke-width="1.5"/>
+  </g>
+  <g transform="translate(320,320)">
+    <rect width="260" height="284" rx="8" fill="white" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect width="260" height="32" rx="8" fill="#1e40af"/>
+    <rect y="24" width="260" height="8" fill="#1e40af"/>
+    <text x="130" y="21" font-size="14" fill="white" text-anchor="middle" font-family="sans-serif" font-weight="bold">decks</text>
+    
+      <rect x="0" y="32" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="48" font-size="12" fill="#b45309" font-family="monospace" font-weight="bold">id</text>
+      <text x="218" y="48" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      <rect x="224" y="37" width="24" height="14" rx="3" fill="#fef3c7"/><text x="236" y="48" font-size="9" fill="#92400e" text-anchor="middle" font-family="monospace">PK</text>
+      <rect x="0" y="56" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="72" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">deck_ID_var</text>
+      <text x="218" y="72" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="80" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="96" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">rank_int</text>
+      <text x="218" y="96" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      
+      <rect x="0" y="104" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="120" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">point_int</text>
+      <text x="218" y="120" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      
+      <rect x="0" y="128" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="144" font-size="12" fill="#1d4ed8" font-family="monospace" font-weight="bold">event_holding_id</text>
+      <text x="218" y="144" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      <rect x="224" y="133" width="24" height="14" rx="3" fill="#dbeafe"/><text x="236" y="144" font-size="9" fill="#1e40af" text-anchor="middle" font-family="monospace">FK</text>
+      <rect x="0" y="152" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="168" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">deck_date_date</text>
+      <text x="218" y="168" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">DATE</text>
+      
+      <rect x="0" y="176" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="192" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">deck_place_var</text>
+      <text x="218" y="192" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="200" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="216" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">place_var</text>
+      <text x="218" y="216" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="224" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="240" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">player_name</text>
+      <text x="218" y="240" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="248" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="264" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">player_id</text>
+      <text x="218" y="264" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+    <rect width="260" height="284" rx="8" fill="none" stroke="#d1d5db" stroke-width="1.5"/>
+  </g>
+  <g transform="translate(700,320)">
+    <rect width="260" height="260" rx="8" fill="white" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect width="260" height="32" rx="8" fill="#1e40af"/>
+    <rect y="24" width="260" height="8" fill="#1e40af"/>
+    <text x="130" y="21" font-size="14" fill="white" text-anchor="middle" font-family="sans-serif" font-weight="bold">cards</text>
+    
+      <rect x="0" y="32" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="48" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">id</text>
+      <text x="218" y="48" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      
+      <rect x="0" y="56" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="72" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">deck_ID_var</text>
+      <text x="218" y="72" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="80" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="96" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">name_var</text>
+      <text x="218" y="96" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="104" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="120" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">category_int</text>
+      <text x="218" y="120" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      
+      <rect x="0" y="128" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="144" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">image_var</text>
+      <text x="218" y="144" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="152" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="168" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">count_int</text>
+      <text x="218" y="168" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">DECIMAL</text>
+      
+      <rect x="0" y="176" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="192" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">stage</text>
+      <text x="218" y="192" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="200" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="216" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">type</text>
+      <text x="218" y="216" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="224" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="240" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">first_attack</text>
+      <text x="218" y="240" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+    <rect width="260" height="260" rx="8" fill="none" stroke="#d1d5db" stroke-width="1.5"/>
+  </g>
+  <g transform="translate(700,40)">
+    <rect width="260" height="92" rx="8" fill="white" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect width="260" height="32" rx="8" fill="#1e40af"/>
+    <rect y="24" width="260" height="8" fill="#1e40af"/>
+    <text x="130" y="21" font-size="14" fill="white" text-anchor="middle" font-family="sans-serif" font-weight="bold">card_categories</text>
+    
+      <rect x="0" y="32" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="48" font-size="12" fill="#b45309" font-family="monospace" font-weight="bold">id</text>
+      <text x="218" y="48" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      <rect x="224" y="37" width="24" height="14" rx="3" fill="#fef3c7"/><text x="236" y="48" font-size="9" fill="#92400e" text-anchor="middle" font-family="monospace">PK</text>
+      <rect x="0" y="56" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="72" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">name_var</text>
+      <text x="218" y="72" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR(100)</text>
+      
+    <rect width="260" height="92" rx="8" fill="none" stroke="#d1d5db" stroke-width="1.5"/>
+  </g>
+  <g transform="translate(40,40)">
+    <rect width="260" height="116" rx="8" fill="white" stroke="#d1d5db" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect width="260" height="32" rx="8" fill="#1e40af"/>
+    <rect y="24" width="260" height="8" fill="#1e40af"/>
+    <text x="130" y="21" font-size="14" fill="white" text-anchor="middle" font-family="sans-serif" font-weight="bold">deck_categories1</text>
+    
+      <rect x="0" y="32" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="48" font-size="12" fill="#b45309" font-family="monospace" font-weight="bold">id</text>
+      <text x="218" y="48" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">INT</text>
+      <rect x="224" y="37" width="24" height="14" rx="3" fill="#fef3c7"/><text x="236" y="48" font-size="9" fill="#92400e" text-anchor="middle" font-family="monospace">PK</text>
+      <rect x="0" y="56" width="260" height="24" fill="#ffffff"/>
+      <text x="10" y="72" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">category1_var</text>
+      <text x="218" y="72" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">VARCHAR</text>
+      
+      <rect x="0" y="80" width="260" height="24" fill="#f9fafb"/>
+      <text x="10" y="96" font-size="12" fill="#111827" font-family="monospace" font-weight="normal">conds</text>
+      <text x="218" y="96" font-size="10" fill="#6b7280" font-family="monospace" text-anchor="end">TEXT</text>
+      
+    <rect width="260" height="116" rx="8" fill="none" stroke="#d1d5db" stroke-width="1.5"/>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(20,650)">
+    <rect width="200" height="60" rx="6" fill="white" stroke="#d1d5db" stroke-width="1"/>
+    <rect x="10" y="12" width="20" height="12" rx="2" fill="#fef3c7"/>
+    <text x="14" y="22" font-size="9" fill="#92400e" font-family="monospace">PK</text>
+    <text x="36" y="22" font-size="11" fill="#374151" font-family="sans-serif">Primary Key</text>
+    <rect x="10" y="32" width="20" height="12" rx="2" fill="#dbeafe"/>
+    <text x="14" y="42" font-size="9" fill="#1e40af" font-family="monospace">FK</text>
+    <text x="36" y="42" font-size="11" fill="#374151" font-family="sans-serif">Foreign Key</text>
+  </g>
+</svg>
