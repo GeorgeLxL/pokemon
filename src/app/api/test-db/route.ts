@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/db";
 
 export async function GET() {
   try {
     console.log('Testing database connection...');
     
-    // Simple query to test connection
-    const result = await prisma.$queryRaw`SELECT 1 as test`;
+    const [result] = await db.query('SELECT 1 as test');
     console.log('Database connection successful:', result);
     
-    // Test if tables exist
-    const eventCount = await prisma.events.count();
-    const deckCount = await prisma.decks.count();
+    const [eventCountResult] = await db.query('SELECT COUNT(*) as count FROM events');
+    const [deckCountResult] = await db.query('SELECT COUNT(*) as count FROM decks');
+    const eventCount = (eventCountResult as {count: number}[])[0]?.count ?? 0;
+    const deckCount = (deckCountResult as {count: number}[])[0]?.count ?? 0;
     
     return NextResponse.json({
       status: 'success',

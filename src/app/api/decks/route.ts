@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const result = await Promise.race([
       getDecksAndStats(filter, page, pageSize),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout')), 36000000)
+        setTimeout(() => reject(new Error('Database query timeout')), 1200000)
       )
     ]);
     

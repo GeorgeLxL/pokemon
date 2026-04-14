@@ -7,8 +7,6 @@ export const db = globalForDb.db ?? mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   connectTimeout: 60000,
-  // @ts-ignore — mysql2 pool option
-  queryTimeout: 3600000,
 });
 
 if (process.env.NODE_ENV !== "production") globalForDb.db = db;
