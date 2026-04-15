@@ -190,16 +190,14 @@ export async function getDecksAndStats(
 
   const deckRows = decks_result as DeckRow[];
 
-  console.log(deckRows[0].filtered_deck_count);
-
   const stats: DeckStats = {
     eventCount: Number(eventCount),
     totalDeckCount: Number(totalDeckCount),
-    filteredDeckCount: Number(deckRows[0].filtered_deck_count),
+    filteredDeckCount: Number(deckRows.length > 0 ? deckRows[0].filtered_deck_count : 0),
   };
 
   const decks: Deck[] = deckRows;
-  return { decks, total: Number(deckRows[0].filtered_deck_count), stats };
+  return { decks, total: Number(deckRows.length > 0 ? deckRows[0].filtered_deck_count : 0), stats };
 }
 
 // ─── getCards ─────────────────────────────────────────────────────────────────
