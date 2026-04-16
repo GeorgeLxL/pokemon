@@ -41,19 +41,12 @@ function groupCardRows(flat: CardFlatRow[]): CardRow[] {
         image_var: row.image_var,
         name_var: row.name_var,
         counts: [],
-        max_appearance: 0,
       });
     }
     const entry = map.get(key)!;
     entry.counts.push({ count: Number(row.count_int), appearances: Number(row.appearance_count) });
-    if (Number(row.appearance_count) > entry.max_appearance) {
-      entry.max_appearance = Number(row.appearance_count);
-    }
   }
-  for (const entry of map.values()) {
-    entry.counts.sort((a, b) => a.count - b.count);
-  }
-  return [...map.values()].sort((a, b) => b.max_appearance - a.max_appearance);
+  return [...map.values()]
 }
 
 // ─── getDecksAndStats ─────────────────────────────────────────────────────────
@@ -208,18 +201,82 @@ export async function getCards(filter: DeckFilter): Promise<CardRow[]> {
     : "";
   const rankList = filter.ranks.map(Number).join(",");
 
-  const [flat] = await db.query<any[]>(`
-    SELECT c.category_int, MIN(c.image_var) AS image_var, c.name_var, c.count_int,
-      COUNT(DISTINCT c.deck_ID_var) AS appearance_count
-    FROM cards c
-    INNER JOIN decks d ON c.deck_ID_var = d.deck_ID_var
-    INNER JOIN events e ON d.event_holding_id = e.event_holding_id
-    WHERE e.event_date_date BETWEEN ? AND ?
-    AND e.event_league_int = ? AND d.rank_int IN (${rankList}) ${prefWhere}
-    GROUP BY c.category_int, c.name_var, c.count_int
-    ORDER BY c.category_int, appearance_count DESC
+  const startDate = filter.startDate; // Keep as-is since MySQL DATE type doesn't store timezone
+  const endDate = filter.endDate;
 
-  `, [filter.startDate, filter.endDate, filter.league]);
+  // If category is empty string, skip category filtering
+  let conds = [];
+  let deckCardCond = "";
+
+  if (filter.category && filter.category.trim() !== "") {
+      let cd_query = "";
+      if (filter.category.includes("【")) {
+        cd_query = `SELECT conds from deck_categories1 WHERE category1_var = ?`;
+      } else {
+        cd_query = `SELECT conds from deck_categories1 WHERE category1_var = ? OR category1_var LIKE '${filter.category}%'`;
+      }
+      const [conditions] = await db.query<any[]>(cd_query, [filter.category]);
+      if (conditions && Array.isArray(conditions) && conditions.length > 0) {
+        deckCardCond = "(";
+        for (let i = 0; i < conditions.length; i++) {
+          conds =
+            conditions[i] &&
+            conditions[i].conds &&
+            conditions[i].conds.length > 0
+              ? JSON.parse(conditions[i].conds)
+              : [];
+          if (conds.length > 0) {
+            conds.forEach((item: Cond, index: number) => {
+              let operator: string;
+              switch (item.cardCondition) {
+                case "eql":
+                  operator = "=";
+                  break;
+                case "gte":
+                  operator = ">=";
+                  break;
+                case "lte":
+                  operator = "<=";
+                  break;
+                case "ueq":
+                  operator = "!=";
+                  break;
+                default:
+                  operator = "=";
+                  break;
+              }
+              deckCardCond += `( EXISTS ( SELECT 1 FROM cards WHERE deck_ID_var = c.deck_ID_var AND name_var = '${item.cardName}' AND count_int ${operator} ${item.cardNumber} )`;
+              if (index < conds.length - 1) {
+                deckCardCond += ` AND `;
+              } else {
+                deckCardCond += `)`;
+              }
+            });
+          }
+          if (i < conditions.length - 1) {
+            deckCardCond += ` OR `;
+          }
+        }
+        deckCardCond += `)`;
+      }
+    }
+
+  const query = `SELECT category_int, MIN(image_var) AS image_var, name_var, count_int,
+                    COUNT(DISTINCT deck_ID_var) AS appearance_count
+                  FROM cards WHERE deck_ID_var IN (
+                  SELECT d.deck_ID_var FROM decks AS d JOIN 
+                  events as e ON d.event_holding_id = e.event_holding_id 
+                  JOIN (
+                  SELECT DISTINCT c.deck_ID_var
+                  FROM cards c
+                  ${deckCardCond? "WHERE " + deckCardCond : ""} ) AS c ON d.deck_ID_var = c.deck_ID_var
+                  WHERE e.event_date_date BETWEEN ? AND ?
+                  AND e.event_league_int = ? AND d.rank_int IN (${rankList}) ${prefWhere})
+                  AND count_int < 5
+                  GROUP BY category_int, name_var, count_int
+                  ORDER BY category_int`
+
+  const [flat] = await db.query<any[]>(query, [filter.startDate, filter.endDate, filter.league]);
 
   return groupCardRows(flat as CardFlatRow[]);
 }

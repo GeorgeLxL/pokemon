@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const result = await Promise.race([
       getCards(filter),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Cards query timeout')), 30000)
+        setTimeout(() => reject(new Error('Cards query timeout')), 120000)
       )
     ]);
     

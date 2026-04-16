@@ -44,7 +44,6 @@ export interface CardRow {
   image_var: string;
   name_var: string;
   counts: { count: number; appearances: number }[];
-  max_appearance: number;
 }
 
 export interface DeckStats {
