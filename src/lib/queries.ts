@@ -31,6 +31,50 @@ function buildRequiredPairs(conds: Cond[]): { pairsSQL: string; whereSQL: string
   return { pairsSQL: pairs.join(" UNION ALL "), whereSQL: wheres.join(" OR ") };
 }
 
+async function buildDeckCardCond(filter: DeckFilter): Promise<string> {
+  let deckCardCond = "";
+
+  if (filter.category && filter.category.trim() !== "") {
+    const cd_query = filter.category.includes("【")
+      ? `SELECT conds FROM deck_categories1 WHERE category1_var = ?`
+      : `SELECT conds FROM deck_categories1 WHERE category1_var = ? OR category1_var LIKE '${filter.category}%'`;
+    const [conditions] = await db.query<any[]>(cd_query, [filter.category]);
+
+    if (Array.isArray(conditions) && conditions.length > 0) {
+      const groups: string[] = [];
+      for (const row of conditions) {
+        const conds: Cond[] = row?.conds ? JSON.parse(row.conds) : [];
+        if (conds.length === 0) continue;
+        const parts = conds.map(
+          (item) =>
+            `EXISTS ( SELECT 1 FROM cards WHERE deck_ID_var = c.deck_ID_var AND name_var = '${item.cardName}' AND count_int ${condToOperator(item.cardCondition)} ${item.cardNumber} )`
+        );
+        groups.push(`( ${parts.join(" AND ")} )`);
+      }
+      if (groups.length > 0) deckCardCond = `( ${groups.join(" OR ")} )`;
+    }
+  }
+
+  if (
+    (filter.cardName && filter.cardName.trim() !== "") ||
+    (filter.cardNumMin && filter.cardNumMin.trim() !== "") ||
+    (filter.cardNumMax && filter.cardNumMax.trim() !== "")
+  ) {
+    if (deckCardCond) deckCardCond += " AND ";
+    let cardCond = `EXISTS ( SELECT 1 FROM cards WHERE deck_ID_var = c.deck_ID_var`;
+    if (filter.cardName && filter.cardName.trim() !== "")
+      cardCond += ` AND name_var = '${filter.cardName}'`;
+    if (filter.cardNumMin && filter.cardNumMin.trim() !== "")
+      cardCond += ` AND count_int >= ${Number(filter.cardNumMin)}`;
+    if (filter.cardNumMax && filter.cardNumMax.trim() !== "")
+      cardCond += ` AND count_int <= ${Number(filter.cardNumMax)}`;
+    cardCond += " )";
+    deckCardCond += cardCond;
+  }
+
+  return deckCardCond;
+}
+
 function groupCardRows(flat: CardFlatRow[]): CardRow[] {
   const map = new Map<string, CardRow>();
   for (const row of flat) {
@@ -77,84 +121,10 @@ export async function getDecksAndStats(
 
     // console.log("filter==", filter);
 
-    // Convert dates to JST (UTC+9) by treating input as JST date
     const startDate = filter.startDate; // Keep as-is since MySQL DATE type doesn't store timezone
     const endDate = filter.endDate;
 
-    // If category is empty string, skip category filtering
-    let conds = [];
-    let deckCardCond = "";
-
-    // console.log("step 1")
-
-    if (filter.category && filter.category.trim() !== "") {
-      let cd_query = "";
-      if (filter.category.includes("【")) {
-        cd_query = `SELECT conds from deck_categories1 WHERE category1_var = ?`;
-      } else {
-        cd_query = `SELECT conds from deck_categories1 WHERE category1_var = ? OR category1_var LIKE '${filter.category}%'`;
-      }
-      const [conditions] = await db.query<any[]>(cd_query, [filter.category]);
-      if (conditions && Array.isArray(conditions) && conditions.length > 0) {
-        deckCardCond = "(";
-        for (let i = 0; i < conditions.length; i++) {
-          conds =
-            conditions[i] &&
-            conditions[i].conds &&
-            conditions[i].conds.length > 0
-              ? JSON.parse(conditions[i].conds)
-              : [];
-          if (conds.length > 0) {
-            conds.forEach((item: Cond, index: number) => {
-              let operator: string;
-              switch (item.cardCondition) {
-                case "eql":
-                  operator = "=";
-                  break;
-                case "gte":
-                  operator = ">=";
-                  break;
-                case "lte":
-                  operator = "<=";
-                  break;
-                case "ueq":
-                  operator = "!=";
-                  break;
-                default:
-                  operator = "=";
-                  break;
-              }
-              deckCardCond += `( EXISTS ( SELECT 1 FROM cards WHERE deck_ID_var = c.deck_ID_var AND name_var = '${item.cardName}' AND count_int ${operator} ${item.cardNumber} )`;
-              if (index < conds.length - 1) {
-                deckCardCond += ` AND `;
-              } else {
-                deckCardCond += `)`;
-              }
-            });
-          }
-          if (i < conditions.length - 1) {
-            deckCardCond += ` OR `;
-          }
-        }
-        deckCardCond += `)`;
-      }
-    }
-
-    if (filter.cardName && filter.cardName.trim() !== "" || filter.cardNumMin !== undefined && filter.cardNumMin !== null && filter.cardNumMin.trim() !== "" || filter.cardNumMax !== undefined && filter.cardNumMax !== null && filter.cardNumMax.trim() !== "") {
-      if (deckCardCond) deckCardCond += ` AND `;
-      deckCardCond += `EXISTS ( SELECT 1 FROM cards WHERE deck_ID_var = c.deck_ID_var `;
-      if (filter.cardName && filter.cardName.trim() !== "") {
-        deckCardCond += ` AND name_var = '${filter.cardName}' `;
-      }
-      console.log(filter.cardNumMin);
-      if (filter.cardNumMin !== undefined && filter.cardNumMin !== null && filter.cardNumMin.trim() !== "") {
-        deckCardCond += ` AND count_int >= ${Number(filter.cardNumMin)}`;
-      }
-      if (filter.cardNumMax !== undefined && filter.cardNumMax !== null && filter.cardNumMax.trim() !== "") {
-        deckCardCond += ` AND count_int <= ${Number(filter.cardNumMax)}`;
-      }
-      deckCardCond += `)`;
-    }
+    const deckCardCond = await buildDeckCardCond(filter);
 
     let query = `SELECT *, COUNT(*) OVER () AS filtered_deck_count FROM (
                   SELECT d.*, e.event_prefecture FROM decks AS d JOIN 
@@ -169,8 +139,6 @@ export async function getDecksAndStats(
                   LIMIT ${pageSize} OFFSET ${offset}`;
 
     
-  //   console.log("step 4")
-
     const [decks_result] = await db.query(query, [
       startDate,
       endDate,
@@ -204,62 +172,7 @@ export async function getCards(filter: DeckFilter): Promise<CardRow[]> {
   const startDate = filter.startDate; // Keep as-is since MySQL DATE type doesn't store timezone
   const endDate = filter.endDate;
 
-  // If category is empty string, skip category filtering
-  let conds = [];
-  let deckCardCond = "";
-
-  if (filter.category && filter.category.trim() !== "") {
-      let cd_query = "";
-      if (filter.category.includes("【")) {
-        cd_query = `SELECT conds from deck_categories1 WHERE category1_var = ?`;
-      } else {
-        cd_query = `SELECT conds from deck_categories1 WHERE category1_var = ? OR category1_var LIKE '${filter.category}%'`;
-      }
-      const [conditions] = await db.query<any[]>(cd_query, [filter.category]);
-      if (conditions && Array.isArray(conditions) && conditions.length > 0) {
-        deckCardCond = "(";
-        for (let i = 0; i < conditions.length; i++) {
-          conds =
-            conditions[i] &&
-            conditions[i].conds &&
-            conditions[i].conds.length > 0
-              ? JSON.parse(conditions[i].conds)
-              : [];
-          if (conds.length > 0) {
-            conds.forEach((item: Cond, index: number) => {
-              let operator: string;
-              switch (item.cardCondition) {
-                case "eql":
-                  operator = "=";
-                  break;
-                case "gte":
-                  operator = ">=";
-                  break;
-                case "lte":
-                  operator = "<=";
-                  break;
-                case "ueq":
-                  operator = "!=";
-                  break;
-                default:
-                  operator = "=";
-                  break;
-              }
-              deckCardCond += `( EXISTS ( SELECT 1 FROM cards WHERE deck_ID_var = c.deck_ID_var AND name_var = '${item.cardName}' AND count_int ${operator} ${item.cardNumber} )`;
-              if (index < conds.length - 1) {
-                deckCardCond += ` AND `;
-              } else {
-                deckCardCond += `)`;
-              }
-            });
-          }
-          if (i < conditions.length - 1) {
-            deckCardCond += ` OR `;
-          }
-        }
-        deckCardCond += `)`;
-      }
-    }
+  const deckCardCond = await buildDeckCardCond(filter);
 
   const query = `SELECT category_int, MIN(image_var) AS image_var, name_var, count_int,
                     COUNT(DISTINCT deck_ID_var) AS appearance_count
@@ -276,7 +189,7 @@ export async function getCards(filter: DeckFilter): Promise<CardRow[]> {
                   GROUP BY category_int, name_var, count_int
                   ORDER BY category_int`
 
-  const [flat] = await db.query<any[]>(query, [filter.startDate, filter.endDate, filter.league]);
+  const [flat] = await db.query<any[]>(query, [startDate, endDate, filter.league]);
 
   return groupCardRows(flat as CardFlatRow[]);
 }
