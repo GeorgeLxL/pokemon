@@ -94,7 +94,7 @@ export default function Cards({ cards, filter }: Props) {
               <span className="text-xl">{isCollapsed ? "＋" : "−"}</span>
             </div>
             {!isCollapsed && (
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4" onClick={e => e.stopPropagation()}>
+              <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-5 gap-4" onClick={e => e.stopPropagation()}>
                 {categoryCards.map((card) => (
                   <div key={`${card.category_int}-${card.name_var}`} className="flex flex-col justify-start bg-blue-200 gap-4 p-3 pb-6 border border-gray-500 rounded-xl hover:bg-blue-300">
                     <div className="w-full h-auto flex-shrink-0 rounded-xl overflow-hidden">
