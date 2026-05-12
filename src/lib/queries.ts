@@ -1,5 +1,5 @@
 import { db } from "./db";
-import type { DeckFilter, DeckRow, CardFlatRow, CardRow, DeckStats, Deck } from "./types";
+import type { DeckFilter, CardFlatRow, CardRow, DeckStats, Deck } from "./types";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -9,70 +9,107 @@ function condToOperator(c: string): string {
   return c === "eql" ? "=" : c === "gte" ? ">=" : c === "lte" ? "<=" : "!=";
 }
 
-async function fetchConds(category: string): Promise<Cond[]> {
-  if (!category.trim()) return [];
-
-  const like = category.includes("【") ? category : `${category}%`;
-  const [rows] = await db.query<any[]>(
-    "SELECT conds FROM deck_categories1 WHERE category1_var = ? OR category1_var LIKE ?",
-    [category, like]
-  );
-  return rows.flatMap((r: any) => (r.conds ? (JSON.parse(r.conds) as Cond[]) : []));
+interface CardFilterSpec {
+  groups: Cond[][]; // groups ORed; conds within a group ANDed
+  standalone?: { name?: string; min?: number; max?: number };
 }
 
-function buildRequiredPairs(conds: Cond[]): { pairsSQL: string; whereSQL: string } {
-  const pairs = conds.map(
-    (c) => `SELECT '${c.cardName}' AS name_var, ${c.cardNumber} AS required_count, '${condToOperator(c.cardCondition)}' AS operator`
-  );
-  const wheres = conds.map((c) => {
-    const op = condToOperator(c.cardCondition);
-    return `(rp.operator = '${op}' AND ufc.count_int ${op} rp.required_count)`;
-  });
-  return { pairsSQL: pairs.join(" UNION ALL "), whereSQL: wheres.join(" OR ") };
-}
-
-async function buildDeckCardCond(filter: DeckFilter): Promise<string> {
-  let deckCardCond = "";
+async function fetchFilterSpec(filter: DeckFilter): Promise<CardFilterSpec | null> {
+  const spec: CardFilterSpec = { groups: [] };
 
   if (filter.category && filter.category.trim() !== "") {
-    const cd_query = filter.category.includes("【")
+    const isExact = filter.category.includes("【");
+    const sql = isExact
       ? `SELECT conds FROM deck_categories1 WHERE category1_var = ?`
-      : `SELECT conds FROM deck_categories1 WHERE category1_var = ? OR category1_var LIKE '${filter.category}%'`;
-    const [conditions] = await db.query<any[]>(cd_query, [filter.category]);
-
-    if (Array.isArray(conditions) && conditions.length > 0) {
-      const groups: string[] = [];
-      for (const row of conditions) {
-        const conds: Cond[] = row?.conds ? JSON.parse(row.conds) : [];
-        if (conds.length === 0) continue;
-        const parts = conds.map(
-          (item) =>
-            `EXISTS ( SELECT 1 FROM cards WHERE deck_ID_var = c.deck_ID_var AND name_var = '${item.cardName}' AND count_int ${condToOperator(item.cardCondition)} ${item.cardNumber} )`
-        );
-        groups.push(`( ${parts.join(" AND ")} )`);
-      }
-      if (groups.length > 0) deckCardCond = `( ${groups.join(" OR ")} )`;
+      : `SELECT conds FROM deck_categories1 WHERE category1_var = ? OR category1_var LIKE ?`;
+    const params = isExact ? [filter.category] : [filter.category, `${filter.category}%`];
+    const [rows] = await db.query<any[]>(sql, params);
+    for (const row of rows) {
+      const conds: Cond[] = row?.conds ? JSON.parse(row.conds) : [];
+      if (conds.length > 0) spec.groups.push(conds);
     }
   }
 
-  if (
-    (filter.cardName && filter.cardName.trim() !== "") ||
-    (filter.cardNumMin && filter.cardNumMin.trim() !== "") ||
-    (filter.cardNumMax && filter.cardNumMax.trim() !== "")
-  ) {
-    if (deckCardCond) deckCardCond += " AND ";
-    let cardCond = `EXISTS ( SELECT 1 FROM cards WHERE deck_ID_var = c.deck_ID_var`;
-    if (filter.cardName && filter.cardName.trim() !== "")
-      cardCond += ` AND name_var = '${filter.cardName}'`;
-    if (filter.cardNumMin && filter.cardNumMin.trim() !== "")
-      cardCond += ` AND count_int >= ${Number(filter.cardNumMin)}`;
-    if (filter.cardNumMax && filter.cardNumMax.trim() !== "")
-      cardCond += ` AND count_int <= ${Number(filter.cardNumMax)}`;
-    cardCond += " )";
-    deckCardCond += cardCond;
+  const name = filter.cardName?.trim();
+  const minS = filter.cardNumMin?.trim();
+  const maxS = filter.cardNumMax?.trim();
+  if (name || minS || maxS) {
+    spec.standalone = {
+      name: name || undefined,
+      min: minS ? Number(minS) : undefined,
+      max: maxS ? Number(maxS) : undefined,
+    };
   }
 
-  return deckCardCond;
+  if (spec.groups.length === 0 && !spec.standalone) return null;
+  return spec;
+}
+
+// Build a single scan over `cards` that returns the deck_ID_var values
+// satisfying the (groups ORed, standalone ANDed) filter spec.
+function buildQualifyingDecksQuery(spec: CardFilterSpec): { sql: string; params: any[] } {
+  const params: any[] = [];
+  const allNames = new Set<string>();
+  for (const g of spec.groups) for (const c of g) allNames.add(c.cardName);
+  if (spec.standalone?.name) allNames.add(spec.standalone.name);
+
+  // If the standalone filter has count constraints but no name, we can't
+  // pre-restrict by name in WHERE — we need every card row in the scan.
+  const standaloneCountOnly =
+    !!spec.standalone &&
+    !spec.standalone.name &&
+    (spec.standalone.min !== undefined || spec.standalone.max !== undefined);
+
+  let whereSql = "";
+  if (!standaloneCountOnly && allNames.size > 0) {
+    const ph = [...allNames].map(() => "?").join(",");
+    whereSql = `WHERE name_var IN (${ph})`;
+    params.push(...allNames);
+  }
+
+  const groupExprs: string[] = [];
+  for (const group of spec.groups) {
+    const parts: string[] = [];
+    for (const c of group) {
+      const op = condToOperator(c.cardCondition);
+      parts.push(`SUM(name_var = ? AND count_int ${op} ?) > 0`);
+      params.push(c.cardName, c.cardNumber);
+    }
+    groupExprs.push(`(${parts.join(" AND ")})`);
+  }
+
+  let having = "";
+  if (groupExprs.length > 0) having = `(${groupExprs.join(" OR ")})`;
+
+  if (spec.standalone) {
+    const sParts: string[] = [];
+    if (spec.standalone.name) { sParts.push(`name_var = ?`); params.push(spec.standalone.name); }
+    if (spec.standalone.min !== undefined) { sParts.push(`count_int >= ?`); params.push(spec.standalone.min); }
+    if (spec.standalone.max !== undefined) { sParts.push(`count_int <= ?`); params.push(spec.standalone.max); }
+    const sExpr = sParts.length > 0 ? `SUM(${sParts.join(" AND ")}) > 0` : `COUNT(*) > 0`;
+    having = having ? `${having} AND ${sExpr}` : sExpr;
+  }
+
+  if (!having) having = "1=1";
+
+  const sql = `SELECT deck_ID_var FROM cards ${whereSql} GROUP BY deck_ID_var HAVING ${having}`;
+  return { sql, params };
+}
+
+function buildPrefClause(prefectures: string[] | undefined): { sql: string; params: any[] } {
+  if (!prefectures?.length) return { sql: "", params: [] };
+  return {
+    sql: `AND e.event_prefecture IN (${prefectures.map(() => "?").join(",")})`,
+    params: prefectures,
+  };
+}
+
+function buildInClause(field: string, ids: string[] | null): { sql: string; params: any[] } {
+  if (!ids || ids.length === 0) return { sql: "", params: [] };
+  return {
+    sql: `AND ${field} IN (${ids.map(() => "?").join(",")})`,
+    params: ids,
+  };
 }
 
 function groupCardRows(flat: CardFlatRow[]): CardRow[] {
@@ -90,7 +127,7 @@ function groupCardRows(flat: CardFlatRow[]): CardRow[] {
     const entry = map.get(key)!;
     entry.counts.push({ count: Number(row.count_int), appearances: Number(row.appearance_count) });
   }
-  return [...map.values()]
+  return [...map.values()];
 }
 
 // ─── getDecksAndStats ─────────────────────────────────────────────────────────
@@ -100,97 +137,139 @@ export async function getDecksAndStats(
   page: number,
   pageSize: number,
 ): Promise<{ decks: Deck[]; total: number; stats: DeckStats }> {
-  const prefWhere = filter.prefectures?.length
-    ? `AND e.event_prefecture IN (${filter.prefectures.map((p) => `'${p}'`).join(",")})`
-    : "";
-  const rankList = filter.ranks.map(Number).join(",");
+  const pref = buildPrefClause(filter.prefectures);
+  const rankList = filter.ranks.map(Number);
+  const rankPh = rankList.map(() => "?").join(",");
   const offset = (page - 1) * pageSize;
 
-  const [[{ eventCount }]] = await db.query<any[]>(`
-    SELECT COUNT(*) AS eventCount FROM events e
-    WHERE e.event_date_date BETWEEN ? AND ?
-    AND e.event_league_int = ? ${prefWhere}
-  `, [filter.startDate, filter.endDate, filter.league]);
+  const spec = await fetchFilterSpec(filter);
 
-  const [[{ totalDeckCount }]] = await db.query<any[]>(`
-    SELECT COUNT(*) AS totalDeckCount FROM decks d
-    LEFT JOIN events e ON e.event_holding_id = d.event_holding_id
-    WHERE e.event_date_date BETWEEN ? AND ?
-    AND e.event_league_int = ? AND d.rank_int IN (${rankList}) ${prefWhere}
-  `, [filter.startDate, filter.endDate, filter.league]);
+  // One pass over `cards` to get the qualifying deck IDs (only when a card filter is set).
+  let qualifyingIds: string[] | null = null;
+  if (spec) {
+    const q = buildQualifyingDecksQuery(spec);
+    const [rows] = await db.query<any[]>(q.sql, q.params);
+    qualifyingIds = rows.map((r) => r.deck_ID_var);
+  }
+  const qIdsEmpty = qualifyingIds !== null && qualifyingIds.length === 0;
+  const qIn = buildInClause("d.deck_ID_var", qualifyingIds);
 
-    // console.log("filter==", filter);
+  // 3 independent queries in parallel.
+  const eventCountP = db.query<any[]>(
+    `SELECT COUNT(*) AS c FROM events e
+     WHERE e.event_date_date BETWEEN ? AND ?
+       AND e.event_league_int = ? ${pref.sql}`,
+    [filter.startDate, filter.endDate, filter.league, ...pref.params]
+  );
 
-    const startDate = filter.startDate; // Keep as-is since MySQL DATE type doesn't store timezone
-    const endDate = filter.endDate;
+  const totalDeckCountP = db.query<any[]>(
+    `SELECT COUNT(*) AS c FROM decks d
+     JOIN events e ON e.event_holding_id = d.event_holding_id
+     WHERE e.event_date_date BETWEEN ? AND ?
+       AND e.event_league_int = ?
+       AND d.rank_int IN (${rankPh})
+       ${pref.sql}`,
+    [filter.startDate, filter.endDate, filter.league, ...rankList, ...pref.params]
+  );
 
-    const deckCardCond = await buildDeckCardCond(filter);
+  const filteredBaseParams = [
+    filter.startDate, filter.endDate, filter.league, ...rankList, ...pref.params, ...qIn.params,
+  ];
 
-    let query = `SELECT *, COUNT(*) OVER () AS filtered_deck_count FROM (
-                  SELECT d.*, e.event_prefecture FROM decks AS d JOIN 
-                  events as e ON d.event_holding_id = e.event_holding_id 
-                  JOIN (
-                  SELECT DISTINCT c.deck_ID_var
-                  FROM cards c
-                  ${deckCardCond? "WHERE " + deckCardCond : ""} ) AS c ON d.deck_ID_var = c.deck_ID_var
-                  WHERE e.event_date_date BETWEEN ? AND ?
-                  AND e.event_league_int = ? AND d.rank_int IN (${rankList}) ${prefWhere}
-                  ) AS d ORDER BY rank_int
-                  LIMIT ${pageSize} OFFSET ${offset}`;
+  // When there's no card filter, the filtered count equals the total — skip the query.
+  const filteredCountP: Promise<any> = qIdsEmpty
+    ? Promise.resolve([[{ c: 0 }]])
+    : spec
+    ? db.query<any[]>(
+        `SELECT COUNT(*) AS c FROM decks d
+         JOIN events e ON e.event_holding_id = d.event_holding_id
+         WHERE e.event_date_date BETWEEN ? AND ?
+           AND e.event_league_int = ?
+           AND d.rank_int IN (${rankPh})
+           ${pref.sql}
+           ${qIn.sql}`,
+        filteredBaseParams
+      )
+    : Promise.resolve(null);
 
-    
-    const [decks_result] = await db.query(query, [
-      startDate,
-      endDate,
-      filter.league,
-    ]);
+  const decksP: Promise<any> = qIdsEmpty
+    ? Promise.resolve([[]])
+    : db.query<any[]>(
+        `SELECT d.*, e.event_prefecture
+         FROM decks d
+         JOIN events e ON e.event_holding_id = d.event_holding_id
+         WHERE e.event_date_date BETWEEN ? AND ?
+           AND e.event_league_int = ?
+           AND d.rank_int IN (${rankPh})
+           ${pref.sql}
+           ${qIn.sql}
+         ORDER BY d.rank_int
+         LIMIT ? OFFSET ?`,
+        [...filteredBaseParams, pageSize, offset]
+      );
 
-    
-  //   console.log("step 5")
-  //   console.log("query==>", query);
+  const [evRes, totalRes, decksRes, filteredRes] = await Promise.all([
+    eventCountP, totalDeckCountP, decksP, filteredCountP,
+  ]);
 
-  const deckRows = decks_result as DeckRow[];
+  const eventCount = Number((evRes as any)[0][0].c);
+  const totalDeckCount = Number((totalRes as any)[0][0].c);
+  const filteredDeckCount = filteredRes
+    ? Number((filteredRes as any)[0][0].c)
+    : totalDeckCount;
 
-  const stats: DeckStats = {
-    eventCount: Number(eventCount),
-    totalDeckCount: Number(totalDeckCount),
-    filteredDeckCount: Number(deckRows.length > 0 ? deckRows[0].filtered_deck_count : 0),
+  const decks: Deck[] = ((decksRes as any)[0] ?? []) as Deck[];
+
+  return {
+    decks,
+    total: filteredDeckCount,
+    stats: { eventCount, totalDeckCount, filteredDeckCount },
   };
-
-  const decks: Deck[] = deckRows;
-  return { decks, total: Number(deckRows.length > 0 ? deckRows[0].filtered_deck_count : 0), stats };
 }
 
 // ─── getCards ─────────────────────────────────────────────────────────────────
 
 export async function getCards(filter: DeckFilter): Promise<CardRow[]> {
-  const prefWhere = filter.prefectures?.length
-    ? `AND e.event_prefecture IN (${filter.prefectures.map((p) => `'${p}'`).join(",")})`
-    : "";
-  const rankList = filter.ranks.map(Number).join(",");
+  const pref = buildPrefClause(filter.prefectures);
+  const rankList = filter.ranks.map(Number);
+  const rankPh = rankList.map(() => "?").join(",");
 
-  const startDate = filter.startDate; // Keep as-is since MySQL DATE type doesn't store timezone
-  const endDate = filter.endDate;
+  const spec = await fetchFilterSpec(filter);
 
-  const deckCardCond = await buildDeckCardCond(filter);
+  let qualifyingIds: string[] | null = null;
+  if (spec) {
+    const q = buildQualifyingDecksQuery(spec);
+    const [rows] = await db.query<any[]>(q.sql, q.params);
+    qualifyingIds = rows.map((r) => r.deck_ID_var);
+    if (qualifyingIds.length === 0) return [];
+  }
+  const qIn = buildInClause("d.deck_ID_var", qualifyingIds);
 
-  const query = `SELECT category_int, MIN(image_var) AS image_var, name_var, count_int,
-                    COUNT(DISTINCT deck_ID_var) AS appearance_count
-                  FROM cards WHERE deck_ID_var IN (
-                  SELECT d.deck_ID_var FROM decks AS d JOIN 
-                  events as e ON d.event_holding_id = e.event_holding_id 
-                  JOIN (
-                  SELECT DISTINCT c.deck_ID_var
-                  FROM cards c
-                  ${deckCardCond? "WHERE " + deckCardCond : ""} ) AS c ON d.deck_ID_var = c.deck_ID_var
-                  WHERE e.event_date_date BETWEEN ? AND ?
-                  AND e.event_league_int = ? AND d.rank_int IN (${rankList}) ${prefWhere})
-                  AND count_int < 5
-                  GROUP BY category_int, name_var, count_int
-                  ORDER BY category_int`
+  const query = `
+    SELECT category_int,
+           MIN(image_var) AS image_var,
+           name_var,
+           count_int,
+           COUNT(DISTINCT deck_ID_var) AS appearance_count
+    FROM cards
+    WHERE count_int < 5
+      AND deck_ID_var IN (
+        SELECT d.deck_ID_var FROM decks d
+        JOIN events e ON e.event_holding_id = d.event_holding_id
+        WHERE e.event_date_date BETWEEN ? AND ?
+          AND e.event_league_int = ?
+          AND d.rank_int IN (${rankPh})
+          ${pref.sql}
+          ${qIn.sql}
+      )
+    GROUP BY category_int, name_var, count_int
+    ORDER BY category_int`;
 
-  const [flat] = await db.query<any[]>(query, [startDate, endDate, filter.league]);
+  const params = [
+    filter.startDate, filter.endDate, filter.league, ...rankList, ...pref.params, ...qIn.params,
+  ];
 
+  const [flat] = await db.query<any[]>(query, params);
   return groupCardRows(flat as CardFlatRow[]);
 }
 
